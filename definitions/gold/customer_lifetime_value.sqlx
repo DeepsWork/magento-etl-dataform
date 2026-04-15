@@ -1,0 +1,25 @@
+config {
+  type: "view",
+  schema: "magento_gold",
+  name: "customer_lifetime_value",
+  tags: ["gold"],
+  description: "Customer dimension with lifetime value signals"
+}
+
+SELECT
+  customer_id,
+  email,
+  full_name,
+  group_id,
+  store_id,
+  created_at                                             AS customer_since,
+  DATE_DIFF(CURRENT_DATE(), DATE(created_at), DAY)      AS days_as_customer,
+  (
+    SELECT JSON_VALUE(ca, '$.value')
+    FROM UNNEST(JSON_QUERY_ARRAY(custom_attributes_json)) AS ca
+    WHERE JSON_VALUE(ca, '$.attribute_code') = 'is_subscribed'
+    LIMIT 1
+  )                                                     AS is_subscribed,
+  _silver_updated_at
+
+FROM ${ref("customers")}

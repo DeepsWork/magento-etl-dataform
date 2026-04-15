@@ -1,0 +1,49 @@
+config {
+  type: "incremental",
+  schema: "magento_silver",
+  name: "products",
+  uniqueKey: ["sku"],
+  partitionBy: "date(_silver_updated_at)",
+  clusterBy: ["sku", "type_id"],
+  description: "Cleaned product catalog from Magento Bronze",
+  tags: ["silver"],
+  assertions: {
+    uniqueKey: ["sku"],
+    nonNull: ["sku"]
+  }
+}
+
+SELECT
+  CAST(JSON_VALUE(_raw_json, '$.id')  AS INT64)          AS product_id,
+  JSON_VALUE(_raw_json, '$.sku')                         AS sku,
+  JSON_VALUE(_raw_json, '$.name')                        AS name,
+  JSON_VALUE(_raw_json, '$.type_id')                     AS type_id,
+  CAST(JSON_VALUE(_raw_json, '$.status') AS INT64)       AS status,
+  CASE CAST(JSON_VALUE(_raw_json, '$.status') AS INT64)
+    WHEN 1 THEN 'Enabled'
+    WHEN 2 THEN 'Disabled'
+    ELSE 'Unknown'
+  END                                                    AS status_label,
+  SAFE_CAST(JSON_VALUE(_raw_json, '$.price') AS FLOAT64) AS price,
+  SAFE_CAST(
+    JSON_VALUE(_raw_json, '$.extension_attributes.stock_item.qty') AS FLOAT64
+  )                                                      AS qty,
+  SAFE_CAST(
+    JSON_VALUE(_raw_json, '$.extension_attributes.stock_item.is_in_stock') AS BOOL
+  )                                                      AS is_in_stock,
+  SAFE.PARSE_TIMESTAMP(
+    '%Y-%m-%d %H:%M:%S', JSON_VALUE(_raw_json, '$.updated_at')
+  )                                                      AS updated_at,
+  JSON_QUERY(_raw_json, '$.custom_attributes')           AS custom_attributes_json,
+  JSON_QUERY(_raw_json, '$.extension_attributes')        AS extension_attributes_json,
+  _magento_updated_at,
+  CURRENT_TIMESTAMP()                                    AS _silver_updated_at
+
+FROM ${ref("products")}
+
+${ when(incremental(), `
+  WHERE _magento_updated_at > (
+    SELECT COALESCE(MAX(_magento_updated_at), TIMESTAMP('2000-01-01'))
+    FROM ${self()}
+  )
+`) }

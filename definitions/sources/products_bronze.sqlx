@@ -1,0 +1,7 @@
+config {
+  type: "declaration",
+  database: "learning-491910",
+  schema: "magento_bronze",
+  name: "products",
+  description: "Raw products JSON from Magento API"
+}

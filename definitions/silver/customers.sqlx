@@ -1,0 +1,48 @@
+config {
+  type: "incremental",
+  schema: "magento_silver",
+  name: "customers",
+  uniqueKey: ["customer_id"],
+  partitionBy: "date(_silver_updated_at)",
+  clusterBy: ["customer_id"],
+  description: "Cleaned customer records from Magento Bronze",
+  tags: ["silver"],
+  assertions: {
+    uniqueKey: ["customer_id"],
+    nonNull: ["customer_id", "email"]
+  }
+}
+
+SELECT
+  CAST(JSON_VALUE(_raw_json, '$.id')         AS INT64)   AS customer_id,
+  JSON_VALUE(_raw_json, '$.email')                       AS email,
+  JSON_VALUE(_raw_json, '$.firstname')                   AS firstname,
+  JSON_VALUE(_raw_json, '$.lastname')                    AS lastname,
+  CONCAT(
+    COALESCE(JSON_VALUE(_raw_json, '$.firstname'), ''),
+    ' ',
+    COALESCE(JSON_VALUE(_raw_json, '$.lastname'), '')
+  )                                                      AS full_name,
+  CAST(JSON_VALUE(_raw_json, '$.group_id')   AS INT64)   AS group_id,
+  CAST(JSON_VALUE(_raw_json, '$.store_id')   AS INT64)   AS store_id,
+  CAST(JSON_VALUE(_raw_json, '$.website_id') AS INT64)   AS website_id,
+  SAFE.PARSE_TIMESTAMP(
+    '%Y-%m-%d %H:%M:%S', JSON_VALUE(_raw_json, '$.created_at')
+  )                                                      AS created_at,
+  SAFE.PARSE_TIMESTAMP(
+    '%Y-%m-%d %H:%M:%S', JSON_VALUE(_raw_json, '$.updated_at')
+  )                                                      AS updated_at,
+  JSON_QUERY(_raw_json, '$.addresses')                   AS addresses_json,
+  JSON_QUERY(_raw_json, '$.custom_attributes')           AS custom_attributes_json,
+  _extracted_at                                          AS _bronze_extracted_at,
+  _magento_updated_at,
+  CURRENT_TIMESTAMP()                                    AS _silver_updated_at
+
+FROM ${ref("customers")}
+
+${ when(incremental(), `
+  WHERE _magento_updated_at > (
+    SELECT COALESCE(MAX(_magento_updated_at), TIMESTAMP('2000-01-01'))
+    FROM ${self()}
+  )
+`) }

@@ -1,0 +1,6 @@
+{
+  "warehouse": "bigquery",
+  "defaultSchema": "magento_silver",
+  "defaultDatabase": "learning-491910",
+  "defaultLocation": "asia-south1"
+}

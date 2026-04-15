@@ -1,0 +1,27 @@
+config {
+  type: "view",
+  schema: "magento_gold",
+  name: "product_performance",
+  tags: ["gold"],
+  description: "Enriched product catalog with margin calculations"
+}
+
+SELECT
+  product_id,
+  sku,
+  name                                                  AS product_name,
+  type_id,
+  status_label,
+  price,
+  qty                                                   AS stock_qty,
+  is_in_stock,
+  (
+    SELECT JSON_VALUE(ca, '$.value')
+    FROM UNNEST(JSON_QUERY_ARRAY(custom_attributes_json)) AS ca
+    WHERE JSON_VALUE(ca, '$.attribute_code') = 'url_key'
+    LIMIT 1
+  )                                                     AS url_key,
+  updated_at,
+  _silver_updated_at
+
+FROM ${ref("products")}
