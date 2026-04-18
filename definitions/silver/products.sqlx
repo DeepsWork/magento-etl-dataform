@@ -3,8 +3,10 @@ config {
   schema: "magento_silver",
   name: "products",
   uniqueKey: ["sku"],
-  partitionBy: "date(_silver_updated_at)",
-  clusterBy: ["sku", "type_id"],
+  bigquery: {
+    partitionBy: "DATE(_silver_updated_at)",
+    clusterBy: ["sku", "type_id"]
+  },
   description: "Cleaned product catalog from Magento Bronze",
   tags: ["silver"],
   assertions: {
@@ -12,6 +14,22 @@ config {
     nonNull: ["sku"]
   }
 }
+
+WITH deduped AS (
+  SELECT *,
+    ROW_NUMBER() OVER (
+      PARTITION BY JSON_VALUE(_raw_json, '$.sku')
+      ORDER BY _magento_updated_at DESC, _extracted_at DESC
+    ) AS rn
+  FROM ${ref("magento_bronze", "products")}
+
+  ${ when(incremental(), `
+    WHERE _magento_updated_at > (
+      SELECT COALESCE(MAX(_magento_updated_at), TIMESTAMP('2000-01-01'))
+      FROM ${self()}
+    )
+  `) }
+)
 
 SELECT
   CAST(JSON_VALUE(_raw_json, '$.id')  AS INT64)          AS product_id,
@@ -39,11 +57,5 @@ SELECT
   _magento_updated_at,
   CURRENT_TIMESTAMP()                                    AS _silver_updated_at
 
-FROM ${ref("products")}
-
-${ when(incremental(), `
-  WHERE _magento_updated_at > (
-    SELECT COALESCE(MAX(_magento_updated_at), TIMESTAMP('2000-01-01'))
-    FROM ${self()}
-  )
-`) }
+FROM deduped
+WHERE rn = 1

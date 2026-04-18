@@ -22,4 +22,4 @@ SELECT
   )                                                     AS is_subscribed,
   _silver_updated_at
 
-FROM ${ref("customers")}
+FROM ${ref("magento_silver", "customers")}

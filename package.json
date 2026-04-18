@@ -1,6 +1,6 @@
 {
-  "warehouse": "bigquery",
-  "defaultSchema": "magento_silver",
-  "defaultDatabase": "learning-491910",
-  "defaultLocation": "asia-south1"
+  "name": "magento-etl-dataform",
+  "dependencies": {
+    "@dataform/core": "3.0.0"
+  }
 }

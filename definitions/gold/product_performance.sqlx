@@ -24,4 +24,4 @@ SELECT
   updated_at,
   _silver_updated_at
 
-FROM ${ref("products")}
+FROM ${ref("magento_silver", "products")}
