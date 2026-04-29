@@ -7,8 +7,6 @@ config {
     partitionBy: "DATE(_silver_updated_at)",
     clusterBy: ["customer_id"]
   },
-  description: "Cleaned customer records from Magento Bronze",
-  tags: ["silver"],
   assertions: {
     uniqueKey: ["customer_id"],
     nonNull: ["customer_id", "email"]
@@ -22,39 +20,121 @@ WITH deduped AS (
       ORDER BY _magento_updated_at DESC, _extracted_at DESC
     ) AS rn
   FROM ${ref("magento_bronze", "customers")}
-
   ${ when(incremental(), `
     WHERE _magento_updated_at > (
       SELECT COALESCE(MAX(_magento_updated_at), TIMESTAMP('2000-01-01'))
       FROM ${self()}
     )
   `) }
+),
+
+-- Split billing vs shipping addresses cleanly
+billing AS (
+  SELECT
+    JSON_VALUE(_raw_json, '$.id') AS customer_id,
+    JSON_VALUE(addr, '$.id')                              AS billing_address_id,
+    JSON_VALUE(addr, '$.firstname')                       AS billing_firstname,
+    JSON_VALUE(addr, '$.lastname')                        AS billing_lastname,
+    JSON_VALUE(addr, '$.telephone')                       AS billing_telephone,
+    JSON_VALUE(addr, '$.company')                         AS billing_company,
+    JSON_VALUE(addr, '$.street[0]')                       AS billing_street_line1,
+    JSON_VALUE(addr, '$.street[1]')                       AS billing_street_line2,
+    JSON_VALUE(addr, '$.city')                            AS billing_city,
+    JSON_VALUE(addr, '$.postcode')                        AS billing_postcode,
+    JSON_VALUE(addr, '$.country_id')                      AS billing_country_id,
+    JSON_VALUE(addr, '$.region.region')                   AS billing_region,
+    JSON_VALUE(addr, '$.region.region_code')              AS billing_region_code,
+    CAST(JSON_VALUE(addr, '$.region.region_id') AS INT64) AS billing_region_id
+  FROM ${ref("magento_bronze", "customers")},
+  UNNEST(JSON_QUERY_ARRAY(_raw_json, '$.addresses')) AS addr
+  WHERE JSON_VALUE(addr, '$.default_billing') = 'true'
+),
+
+shipping AS (
+  SELECT
+    JSON_VALUE(_raw_json, '$.id') AS customer_id,
+    JSON_VALUE(addr, '$.id')                              AS shipping_address_id,
+    JSON_VALUE(addr, '$.firstname')                       AS shipping_firstname,
+    JSON_VALUE(addr, '$.lastname')                        AS shipping_lastname,
+    JSON_VALUE(addr, '$.telephone')                       AS shipping_telephone,
+    JSON_VALUE(addr, '$.company')                         AS shipping_company,
+    JSON_VALUE(addr, '$.street[0]')                       AS shipping_street_line1,
+    JSON_VALUE(addr, '$.street[1]')                       AS shipping_street_line2,
+    JSON_VALUE(addr, '$.city')                            AS shipping_city,
+    JSON_VALUE(addr, '$.postcode')                        AS shipping_postcode,
+    JSON_VALUE(addr, '$.country_id')                      AS shipping_country_id,
+    JSON_VALUE(addr, '$.region.region')                   AS shipping_region,
+    JSON_VALUE(addr, '$.region.region_code')              AS shipping_region_code,
+    CAST(JSON_VALUE(addr, '$.region.region_id') AS INT64) AS shipping_region_id
+  FROM ${ref("magento_bronze", "customers")},
+  UNNEST(JSON_QUERY_ARRAY(_raw_json, '$.addresses')) AS addr
+  WHERE JSON_VALUE(addr, '$.default_shipping') = 'true'
 )
 
 SELECT
-  CAST(JSON_VALUE(_raw_json, '$.id')         AS INT64)   AS customer_id,
-  JSON_VALUE(_raw_json, '$.email')                       AS email,
-  JSON_VALUE(_raw_json, '$.firstname')                   AS firstname,
-  JSON_VALUE(_raw_json, '$.lastname')                    AS lastname,
-  CONCAT(
-    COALESCE(JSON_VALUE(_raw_json, '$.firstname'), ''),
-    ' ',
-    COALESCE(JSON_VALUE(_raw_json, '$.lastname'), '')
-  )                                                      AS full_name,
-  CAST(JSON_VALUE(_raw_json, '$.group_id')   AS INT64)   AS group_id,
-  CAST(JSON_VALUE(_raw_json, '$.store_id')   AS INT64)   AS store_id,
-  CAST(JSON_VALUE(_raw_json, '$.website_id') AS INT64)   AS website_id,
-  SAFE.PARSE_TIMESTAMP(
-    '%Y-%m-%d %H:%M:%S', JSON_VALUE(_raw_json, '$.created_at')
-  )                                                      AS created_at,
-  SAFE.PARSE_TIMESTAMP(
-    '%Y-%m-%d %H:%M:%S', JSON_VALUE(_raw_json, '$.updated_at')
-  )                                                      AS updated_at,
-  JSON_QUERY(_raw_json, '$.addresses')                   AS addresses_json,
-  JSON_QUERY(_raw_json, '$.custom_attributes')           AS custom_attributes_json,
-  _extracted_at                                          AS _bronze_extracted_at,
-  _magento_updated_at,
-  CURRENT_TIMESTAMP()                                    AS _silver_updated_at
+  -- ── IDs ───────────────────────────────────────────────────
+  CAST(JSON_VALUE(d._raw_json, '$.id')         AS INT64)  AS customer_id,
+  CAST(JSON_VALUE(d._raw_json, '$.group_id')   AS INT64)  AS group_id,
+  CAST(JSON_VALUE(d._raw_json, '$.store_id')   AS INT64)  AS store_id,
+  CAST(JSON_VALUE(d._raw_json, '$.website_id') AS INT64)  AS website_id,
 
-FROM deduped
-WHERE rn = 1
+  -- ── Personal Info ─────────────────────────────────────────
+  JSON_VALUE(d._raw_json, '$.email')                       AS email,
+  JSON_VALUE(d._raw_json, '$.firstname')                   AS firstname,
+  JSON_VALUE(d._raw_json, '$.lastname')                    AS lastname,
+  CONCAT(
+    COALESCE(JSON_VALUE(d._raw_json, '$.firstname'), ''),
+    ' ',
+    COALESCE(JSON_VALUE(d._raw_json, '$.lastname'), '')
+  )                                                        AS full_name,
+
+  -- ── Account ───────────────────────────────────────────────
+  JSON_VALUE(d._raw_json, '$.created_in')                  AS created_in_store,
+  CAST(JSON_VALUE(d._raw_json, '$.disable_auto_group_change') AS BOOL) AS disable_auto_group_change,
+  CAST(JSON_VALUE(d._raw_json, '$.extension_attributes.is_subscribed') AS BOOL) AS is_subscribed,
+
+  -- ── Billing Address ───────────────────────────────────────
+  b.billing_address_id,
+  b.billing_firstname,
+  b.billing_lastname,
+  b.billing_telephone,
+  b.billing_company,
+  b.billing_street_line1,
+  b.billing_street_line2,
+  b.billing_city,
+  b.billing_postcode,
+  b.billing_country_id,
+  b.billing_region,
+  b.billing_region_code,
+  b.billing_region_id,
+
+  -- ── Shipping Address ──────────────────────────────────────
+  s.shipping_address_id,
+  s.shipping_firstname,
+  s.shipping_lastname,
+  s.shipping_telephone,
+  s.shipping_company,
+  s.shipping_street_line1,
+  s.shipping_street_line2,
+  s.shipping_city,
+  s.shipping_postcode,
+  s.shipping_country_id,
+  s.shipping_region,
+  s.shipping_region_code,
+  s.shipping_region_id,
+
+  -- ── Timestamps ────────────────────────────────────────────
+  SAFE.PARSE_TIMESTAMP('%Y-%m-%d %H:%M:%S',
+    JSON_VALUE(d._raw_json, '$.created_at'))                AS created_at,
+  SAFE.PARSE_TIMESTAMP('%Y-%m-%d %H:%M:%S',
+    JSON_VALUE(d._raw_json, '$.updated_at'))                AS updated_at,
+
+  -- ── Pipeline Metadata ─────────────────────────────────────
+  d._extracted_at                                          AS _bronze_extracted_at,
+  d._magento_updated_at,
+  CURRENT_TIMESTAMP()                                      AS _silver_updated_at
+
+FROM deduped d
+LEFT JOIN billing  b ON b.customer_id  = JSON_VALUE(d._raw_json, '$.id')
+LEFT JOIN shipping s ON s.customer_id  = JSON_VALUE(d._raw_json, '$.id')
+WHERE d.rn = 1
