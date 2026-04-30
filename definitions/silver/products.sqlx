@@ -78,7 +78,7 @@ SELECT
   JSON_VALUE(JSON_QUERY_ARRAY(_raw_json, '$.media_gallery_entries')[SAFE_OFFSET(0)], '$.media_type')                AS media_1_type,
   JSON_VALUE(JSON_QUERY_ARRAY(_raw_json, '$.media_gallery_entries')[SAFE_OFFSET(0)], '$.label')                     AS media_1_label,
   CAST(JSON_VALUE(JSON_QUERY_ARRAY(_raw_json, '$.media_gallery_entries')[SAFE_OFFSET(0)], '$.position')   AS INT64) AS media_1_position,
-  CAST(JSON_VALUE(JSON_QUERY_ARRAY(_raw_json, '$.media_gallery_entries')[SAFE_OFFSET(0)], '$.disabled')   AS BOOL)  AS media_1_disabled,
+  JSON_VALUE(JSON_QUERY_ARRAY(_raw_json, '$.media_gallery_entries')[SAFE_OFFSET(0)], '$.disabled') = 'true'  AS media_1_disabled,
   JSON_VALUE(JSON_QUERY_ARRAY(_raw_json, '$.media_gallery_entries')[SAFE_OFFSET(0)], '$.file')                      AS media_1_file,
   -- image types (booleans from types array)
   (SELECT COUNTIF(t = 'image')       > 0 FROM UNNEST(JSON_VALUE_ARRAY(JSON_QUERY_ARRAY(_raw_json, '$.media_gallery_entries')[SAFE_OFFSET(0)], '$.types')) t) AS media_1_is_base_image,
@@ -91,7 +91,7 @@ SELECT
   JSON_VALUE(JSON_QUERY_ARRAY(_raw_json, '$.media_gallery_entries')[SAFE_OFFSET(1)], '$.media_type')                AS media_2_type,
   JSON_VALUE(JSON_QUERY_ARRAY(_raw_json, '$.media_gallery_entries')[SAFE_OFFSET(1)], '$.label')                     AS media_2_label,
   CAST(JSON_VALUE(JSON_QUERY_ARRAY(_raw_json, '$.media_gallery_entries')[SAFE_OFFSET(1)], '$.position')   AS INT64) AS media_2_position,
-  CAST(JSON_VALUE(JSON_QUERY_ARRAY(_raw_json, '$.media_gallery_entries')[SAFE_OFFSET(1)], '$.disabled')   AS BOOL)  AS media_2_disabled,
+  JSON_VALUE(JSON_QUERY_ARRAY(_raw_json, '$.media_gallery_entries')[SAFE_OFFSET(1)], '$.disabled') = 'true'  AS media_2_disabled,
   JSON_VALUE(JSON_QUERY_ARRAY(_raw_json, '$.media_gallery_entries')[SAFE_OFFSET(1)], '$.file')                      AS media_2_file,
   (SELECT COUNTIF(t = 'image')       > 0 FROM UNNEST(JSON_VALUE_ARRAY(JSON_QUERY_ARRAY(_raw_json, '$.media_gallery_entries')[SAFE_OFFSET(1)], '$.types')) t) AS media_2_is_base_image,
   (SELECT COUNTIF(t = 'small_image') > 0 FROM UNNEST(JSON_VALUE_ARRAY(JSON_QUERY_ARRAY(_raw_json, '$.media_gallery_entries')[SAFE_OFFSET(1)], '$.types')) t) AS media_2_is_small_image,
@@ -103,7 +103,7 @@ SELECT
   JSON_VALUE(JSON_QUERY_ARRAY(_raw_json, '$.media_gallery_entries')[SAFE_OFFSET(2)], '$.media_type')                AS media_3_type,
   JSON_VALUE(JSON_QUERY_ARRAY(_raw_json, '$.media_gallery_entries')[SAFE_OFFSET(2)], '$.label')                     AS media_3_label,
   CAST(JSON_VALUE(JSON_QUERY_ARRAY(_raw_json, '$.media_gallery_entries')[SAFE_OFFSET(2)], '$.position')   AS INT64) AS media_3_position,
-  CAST(JSON_VALUE(JSON_QUERY_ARRAY(_raw_json, '$.media_gallery_entries')[SAFE_OFFSET(2)], '$.disabled')   AS BOOL)  AS media_3_disabled,
+  JSON_VALUE(JSON_QUERY_ARRAY(_raw_json, '$.media_gallery_entries')[SAFE_OFFSET(2)], '$.disabled') = 'true'  AS media_3_disabled,
   JSON_VALUE(JSON_QUERY_ARRAY(_raw_json, '$.media_gallery_entries')[SAFE_OFFSET(2)], '$.file')                      AS media_3_file,
   (SELECT COUNTIF(t = 'image')       > 0 FROM UNNEST(JSON_VALUE_ARRAY(JSON_QUERY_ARRAY(_raw_json, '$.media_gallery_entries')[SAFE_OFFSET(2)], '$.types')) t) AS media_3_is_base_image,
   (SELECT COUNTIF(t = 'small_image') > 0 FROM UNNEST(JSON_VALUE_ARRAY(JSON_QUERY_ARRAY(_raw_json, '$.media_gallery_entries')[SAFE_OFFSET(2)], '$.types')) t) AS media_3_is_small_image,
@@ -141,30 +141,30 @@ SELECT
 
   -- ── Shipping ──────────────────────────────────────────────
   (SELECT JSON_VALUE(ca, '$.value') FROM UNNEST(JSON_QUERY_ARRAY(_raw_json, '$.custom_attributes')) ca WHERE JSON_VALUE(ca, '$.attribute_code') = 'am_shipping_type'     LIMIT 1) AS shipping_type_id,
-  CAST((SELECT JSON_VALUE(ca, '$.value') FROM UNNEST(JSON_QUERY_ARRAY(_raw_json, '$.custom_attributes')) ca WHERE JSON_VALUE(ca, '$.attribute_code') = 'sh_oversize'          LIMIT 1) AS BOOL)  AS is_oversize,
+  (SELECT JSON_VALUE(ca, '$.value') FROM UNNEST(JSON_QUERY_ARRAY(_raw_json, '$.custom_attributes')) ca WHERE JSON_VALUE(ca, '$.attribute_code') = 'sh_oversize' LIMIT 1) = '1' AS is_oversize,
   CAST((SELECT JSON_VALUE(ca, '$.value') FROM UNNEST(JSON_QUERY_ARRAY(_raw_json, '$.custom_attributes')) ca WHERE JSON_VALUE(ca, '$.attribute_code') = 'sh_vendor_ship_delay' LIMIT 1) AS INT64) AS vendor_ship_delay_days,
 
   -- ── Flags ─────────────────────────────────────────────────
-  CAST((SELECT JSON_VALUE(ca, '$.value') FROM UNNEST(JSON_QUERY_ARRAY(_raw_json, '$.custom_attributes')) ca WHERE JSON_VALUE(ca, '$.attribute_code') = 'sh_onsale'        LIMIT 1) AS BOOL) AS is_on_sale,
-  CAST((SELECT JSON_VALUE(ca, '$.value') FROM UNNEST(JSON_QUERY_ARRAY(_raw_json, '$.custom_attributes')) ca WHERE JSON_VALUE(ca, '$.attribute_code') = 'bestsellerattr'   LIMIT 1) AS BOOL) AS is_bestseller,
-  CAST((SELECT JSON_VALUE(ca, '$.value') FROM UNNEST(JSON_QUERY_ARRAY(_raw_json, '$.custom_attributes')) ca WHERE JSON_VALUE(ca, '$.attribute_code') = 'feature_product'  LIMIT 1) AS BOOL) AS is_featured,
-  CAST((SELECT JSON_VALUE(ca, '$.value') FROM UNNEST(JSON_QUERY_ARRAY(_raw_json, '$.custom_attributes')) ca WHERE JSON_VALUE(ca, '$.attribute_code') = 'isfeaturepro'     LIMIT 1) AS BOOL) AS is_featured_pro,
-  CAST((SELECT JSON_VALUE(ca, '$.value') FROM UNNEST(JSON_QUERY_ARRAY(_raw_json, '$.custom_attributes')) ca WHERE JSON_VALUE(ca, '$.attribute_code') = 'rma_allowed'      LIMIT 1) AS BOOL) AS is_rma_allowed,
+  ((SELECT JSON_VALUE(ca, '$.value') FROM UNNEST(JSON_QUERY_ARRAY(_raw_json, '$.custom_attributes')) ca WHERE JSON_VALUE(ca, '$.attribute_code') = 'sh_onsale'        LIMIT 1)) = '1' AS is_on_sale,
+  ((SELECT JSON_VALUE(ca, '$.value') FROM UNNEST(JSON_QUERY_ARRAY(_raw_json, '$.custom_attributes')) ca WHERE JSON_VALUE(ca, '$.attribute_code') = 'bestsellerattr'   LIMIT 1)) = '1' AS is_bestseller,
+  ((SELECT JSON_VALUE(ca, '$.value') FROM UNNEST(JSON_QUERY_ARRAY(_raw_json, '$.custom_attributes')) ca WHERE JSON_VALUE(ca, '$.attribute_code') = 'feature_product'  LIMIT 1)) = '1' AS is_featured,
+  ((SELECT JSON_VALUE(ca, '$.value') FROM UNNEST(JSON_QUERY_ARRAY(_raw_json, '$.custom_attributes')) ca WHERE JSON_VALUE(ca, '$.attribute_code') = 'isfeaturepro'     LIMIT 1)) = '1' AS is_featured_pro,
+  ((SELECT JSON_VALUE(ca, '$.value') FROM UNNEST(JSON_QUERY_ARRAY(_raw_json, '$.custom_attributes')) ca WHERE JSON_VALUE(ca, '$.attribute_code') = 'rma_allowed'      LIMIT 1)) = '1' AS is_rma_allowed,
   CAST((SELECT JSON_VALUE(ca, '$.value') FROM UNNEST(JSON_QUERY_ARRAY(_raw_json, '$.custom_attributes')) ca WHERE JSON_VALUE(ca, '$.attribute_code') = 'is_returnable'    LIMIT 1) AS INT64) AS is_returnable,
 
   -- ── Options ───────────────────────────────────────────────
-  CAST((SELECT JSON_VALUE(ca, '$.value') FROM UNNEST(JSON_QUERY_ARRAY(_raw_json, '$.custom_attributes')) ca WHERE JSON_VALUE(ca, '$.attribute_code') = 'has_options'      LIMIT 1) AS BOOL) AS has_options,
-  CAST((SELECT JSON_VALUE(ca, '$.value') FROM UNNEST(JSON_QUERY_ARRAY(_raw_json, '$.custom_attributes')) ca WHERE JSON_VALUE(ca, '$.attribute_code') = 'required_options' LIMIT 1) AS BOOL) AS required_options,
+  ((SELECT JSON_VALUE(ca, '$.value') FROM UNNEST(JSON_QUERY_ARRAY(_raw_json, '$.custom_attributes')) ca WHERE JSON_VALUE(ca, '$.attribute_code') = 'has_options'      LIMIT 1)) = '1' AS has_options,
+  ((SELECT JSON_VALUE(ca, '$.value') FROM UNNEST(JSON_QUERY_ARRAY(_raw_json, '$.custom_attributes')) ca WHERE JSON_VALUE(ca, '$.attribute_code') = 'required_options' LIMIT 1)) = '1' AS required_options,
 
   -- ── Tax & Gift ────────────────────────────────────────────
   (SELECT JSON_VALUE(ca, '$.value') FROM UNNEST(JSON_QUERY_ARRAY(_raw_json, '$.custom_attributes')) ca WHERE JSON_VALUE(ca, '$.attribute_code') = 'tax_class_id' LIMIT 1) AS tax_class_id,
-  CAST((SELECT JSON_VALUE(ca, '$.value') FROM UNNEST(JSON_QUERY_ARRAY(_raw_json, '$.custom_attributes')) ca WHERE JSON_VALUE(ca, '$.attribute_code') = 'gift_message_available'  LIMIT 1) AS BOOL) AS gift_message_available,
-  CAST((SELECT JSON_VALUE(ca, '$.value') FROM UNNEST(JSON_QUERY_ARRAY(_raw_json, '$.custom_attributes')) ca WHERE JSON_VALUE(ca, '$.attribute_code') = 'gift_wrapping_available' LIMIT 1) AS BOOL) AS gift_wrapping_available,
+  ((SELECT JSON_VALUE(ca, '$.value') FROM UNNEST(JSON_QUERY_ARRAY(_raw_json, '$.custom_attributes')) ca WHERE JSON_VALUE(ca, '$.attribute_code') = 'gift_message_available'  LIMIT 1)) = '1' AS gift_message_available,
+  ((SELECT JSON_VALUE(ca, '$.value') FROM UNNEST(JSON_QUERY_ARRAY(_raw_json, '$.custom_attributes')) ca WHERE JSON_VALUE(ca, '$.attribute_code') = 'gift_wrapping_available' LIMIT 1)) = '1' AS gift_wrapping_available,
 
   -- ── Sitemap & Search ──────────────────────────────────────
-  CAST((SELECT JSON_VALUE(ca, '$.value') FROM UNNEST(JSON_QUERY_ARRAY(_raw_json, '$.custom_attributes')) ca WHERE JSON_VALUE(ca, '$.attribute_code') = 'in_html_sitemap'     LIMIT 1) AS BOOL)    AS in_html_sitemap,
-  CAST((SELECT JSON_VALUE(ca, '$.value') FROM UNNEST(JSON_QUERY_ARRAY(_raw_json, '$.custom_attributes')) ca WHERE JSON_VALUE(ca, '$.attribute_code') = 'in_xml_sitemap'      LIMIT 1) AS BOOL)    AS in_xml_sitemap,
-  CAST((SELECT JSON_VALUE(ca, '$.value') FROM UNNEST(JSON_QUERY_ARRAY(_raw_json, '$.custom_attributes')) ca WHERE JSON_VALUE(ca, '$.attribute_code') = 'use_in_crosslinking' LIMIT 1) AS BOOL)    AS use_in_crosslinking,
+  (SELECT JSON_VALUE(ca, '$.value') FROM UNNEST(JSON_QUERY_ARRAY(_raw_json, '$.custom_attributes')) ca WHERE JSON_VALUE(ca, '$.attribute_code') = 'in_html_sitemap' LIMIT 1) = '1' AS in_html_sitemap,
+  (SELECT JSON_VALUE(ca, '$.value') FROM UNNEST(JSON_QUERY_ARRAY(_raw_json, '$.custom_attributes')) ca WHERE JSON_VALUE(ca, '$.attribute_code') = 'in_xml_sitemap' LIMIT 1) = '1' AS in_xml_sitemap,
+  (SELECT JSON_VALUE(ca, '$.value') FROM UNNEST(JSON_QUERY_ARRAY(_raw_json, '$.custom_attributes')) ca WHERE JSON_VALUE(ca, '$.attribute_code') = 'use_in_crosslinking' LIMIT 1) = '1' AS use_in_crosslinking,
   CAST((SELECT JSON_VALUE(ca, '$.value') FROM UNNEST(JSON_QUERY_ARRAY(_raw_json, '$.custom_attributes')) ca WHERE JSON_VALUE(ca, '$.attribute_code') = 'mst_search_weight'   LIMIT 1) AS FLOAT64) AS search_weight,
   (SELECT JSON_VALUE(ca, '$.value') FROM UNNEST(JSON_QUERY_ARRAY(_raw_json, '$.custom_attributes')) ca WHERE JSON_VALUE(ca, '$.attribute_code') = 'options_container'              LIMIT 1) AS options_container,
   CAST((SELECT JSON_VALUE(ca, '$.value') FROM UNNEST(JSON_QUERY_ARRAY(_raw_json, '$.custom_attributes')) ca WHERE JSON_VALUE(ca, '$.attribute_code') = 'msrp_display_actual_price_type' LIMIT 1) AS INT64) AS msrp_display_actual_price_type,
