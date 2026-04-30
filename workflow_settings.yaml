@@ -1,0 +1,4 @@
+defaultProject: learning-491910
+defaultLocation: asia-south1
+defaultDataset: magento_silver
+defaultAssertionDataset: magento_assertions
